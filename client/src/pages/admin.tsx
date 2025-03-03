@@ -179,28 +179,42 @@ export default function Admin() {
   async function fetchAnimeInfo(malId: number) {
     setLoading(true);
     try {
-      const animeData = await fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/full`);
-      const anime = animeData.data;
+  const animeDataPromise = fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/full`);
+  const episodesDataPromise = fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/episodes`);
 
-      animeForm.setValue("title", anime.title);
-      animeForm.setValue("posterUrl", anime.images.webp.large_image_url);
-      animeForm.setValue("description", anime.synopsis || "");
-      animeForm.setValue("malId", malId);
-      animeForm.setValue("episodes", anime.episodes);
+  // Fetch both in parallel
+  const [animeData, episodesData] = await Promise.all([animeDataPromise, episodesDataPromise]);
 
-      const episodesData = await fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/episodes`);
-      setEpisodes(episodesData.data);
-      setEpisodeUrls(new Array(episodesData.data.length).fill(""));
-    } catch (error: any) {
-      console.error("Error fetching from Jikan:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch anime information",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+  const anime = animeData.data;
+
+  // Ensure title is set
+  animeForm.setValue("title", anime.title);
+  animeForm.setValue("malId", malId);
+  animeForm.setValue("episodes", anime.episodes);
+
+  // Handle image URL safely
+  const imageUrl = anime.images?.webp?.large_image_url || "";
+  animeForm.setValue("posterUrl", imageUrl);
+
+  // Handle description safely (removing unwanted HTML tags if present)
+  const cleanDescription = anime.synopsis
+    ? anime.synopsis.replace(/<\/?[^>]+(>|$)/g, "").trim() // Remove HTML tags
+    : "No description available.";
+  animeForm.setValue("description", cleanDescription);
+
+  setEpisodes(episodesData.data);
+  setEpisodeUrls(new Array(episodesData.data.length).fill(""));
+} catch (error: any) {
+  console.error("Error fetching from Jikan:", error);
+  toast({
+    title: "Error",
+    description: "Failed to fetch anime information",
+    variant: "destructive"
+  });
+} finally {
+  setLoading(false);
     }
+    
   }
 
   function startEditing(anime: Anime) {
