@@ -88,7 +88,7 @@ export default function Admin() {
 
   const createAnimeMutation = useMutation({
     mutationFn: async (data: InsertAnime) => {
-      const res = await apiRequest("POST", "/api/animes", data);
+      const res = await apiRequest("POST", "https://ryuustream.onrender.com/api/animes", data);
       return res.json();
     },
     onSuccess: async (newAnime) => {
@@ -158,7 +158,7 @@ export default function Admin() {
 
   const addEpisode = useMutation({
     mutationFn: async (episode: {animeId: number, number: number, title: string, iframeUrl: string}) => {
-      await apiRequest("POST", "/api/episodes", episode);
+      await apiRequest("POST", "https://ryuustream.onrender.com/api/episodes", episode);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/animes'] });
