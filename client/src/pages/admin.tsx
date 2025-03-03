@@ -179,7 +179,7 @@ export default function Admin() {
   async function fetchAnimeInfo(malId: number) {
     setLoading(true);
     try {
-      const animeData = await fetchFromJikan(`/anime/${malId}/full`);
+      const animeData = await fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/full`);
       const anime = animeData.data;
 
       animeForm.setValue("title", anime.title);
@@ -188,7 +188,7 @@ export default function Admin() {
       animeForm.setValue("malId", malId);
       animeForm.setValue("episodes", anime.episodes);
 
-      const episodesData = await fetchFromJikan(`/anime/${malId}/episodes`);
+      const episodesData = await fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/episodes`);
       setEpisodes(episodesData.data);
       setEpisodeUrls(new Array(episodesData.data.length).fill(""));
     } catch (error: any) {
