@@ -2,11 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { InsertAnime, insertAnimeSchema, insertEpisodeSchema } from "@shared/schema";
-import { InsertEpisode } from "@shared/schema";
-import type { Episode } from "@shared/schema";
+import { InsertAnime, insertAnimeSchema, insertEpisodeSchema, InsertEpisode, Episode, Anime } from "@shared/schema";
 import { apiRequest } from "@/lib/api";
-import type { Anime } from "@shared/schema";
 import {
   Form,
   FormControl,
@@ -17,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Edit2, Pencil, Trash } from "lucide-react";
+import { Loader2, Edit2, Trash } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +29,6 @@ import {
   TabsList,
   TabsTrigger
 } from "@/components/ui/tabs";
-import { desc, eq } from "drizzle-orm";
 
 interface JikanEpisode {
   mal_id: number;
@@ -48,72 +44,44 @@ export default function Admin() {
   const [episodeUrls, setEpisodeUrls] = useState<string[]>([]);
   const [editingAnimeId, setEditingAnimeId] = useState<number | null>(null);
   const [editingEpisodeId, setEditingEpisodeId] = useState<number | null>(null);
-  const [editingEpisodeData, setEditingEpisodeData] = useState({ title: "", iframeUrl: "" }); // State for editing episode data
+  const [editingEpisodeData, setEditingEpisodeData] = useState({ title: "", iframeUrl: "" });
 
+  const { data: animes } = useQuery<Anime[]>({ queryKey: ["/api/animes"], enabled: true });
 
-  const { data: animes } = useQuery<Anime[]>({
-    queryKey: ["/api/animes"],
-    enabled: true,
-  });
-
-  const animeForm = useForm<InsertAnime>({
-    resolver: zodResolver(insertAnimeSchema)
-  });
-
-  const editAnimeForm = useForm<InsertAnime>({
-    resolver: zodResolver(insertAnimeSchema)
-  });
+  const animeForm = useForm<InsertAnime>({ resolver: zodResolver(insertAnimeSchema) });
+  const editAnimeForm = useForm<InsertAnime>({ resolver: zodResolver(insertAnimeSchema) });
 
   const createEpisodeMutation = useMutation({
     mutationFn: async (episode: InsertEpisode) => {
       const response = await fetch('/api/episodes', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(episode),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message);
-      }
-
+      if (!response.ok) throw new Error((await response.json()).message);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/animes'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/animes'] }),
   });
 
   const createAnimeMutation = useMutation({
     mutationFn: async (data: InsertAnime) => {
-      const res = await apiRequest("POST", "https://ryuustream.onrender.com/api/animes", data);
+      const res = await apiRequest("POST", "/api/animes", data);
       return res.json();
     },
     onSuccess: async (newAnime) => {
-      for (let i = 0; i < episodes.length; i++) {
-        const episode = episodes[i];
-        const url = episodeUrls[i];
-        if (url) {
-          try {
+      await Promise.all(
+        episodes.map(async (episode, i) => {
+          if (episodeUrls[i]) {
             await createEpisodeMutation.mutateAsync({
               animeId: newAnime.id,
               number: episode.episode,
               title: episode.title,
-              iframeUrl: url
-            });
-          } catch (error) {
-            console.error('Failed to create episode:', error);
-            toast({
-              title: "Error creating episode",
-              description: "Failed to create episode " + episode.episode,
-              variant: "destructive"
+              iframeUrl: episodeUrls[i]
             });
           }
-        }
-      }
-
+        })
+      );
       queryClient.invalidateQueries({ queryKey: ["/api/animes"] });
       toast({ title: "Anime and episodes created successfully" });
       animeForm.reset();
@@ -122,133 +90,45 @@ export default function Admin() {
     }
   });
 
-  const updateAnimeMutation = useMutation({
-    mutationFn: async (data: { id: number; anime: InsertAnime }) => {
-      const res = await apiRequest("PATCH", `/api/animes/${data.id}`, data.anime);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/animes"] });
-      toast({ title: "Anime updated successfully" });
-      setEditingAnimeId(null);
-    }
-  });
-
-  const updateEpisodeMutation = useMutation({
-    mutationFn: async (data: Episode) => {
-      const res = await apiRequest("PATCH", `/api/episodes/${data.id}`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/animes'] });
-      toast({ title: 'Episode updated successfully!' });
-      setEditingEpisodeId(null);
-    }
-  });
-
-  const deleteEpisodeMutation = useMutation({
-    mutationFn: async (episodeId: number) => {
-      await apiRequest("DELETE", `/api/episodes/${episodeId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/animes'] });
-      toast({ title: 'Episode deleted successfully!' });
-    }
-  });
-
-  const addEpisode = useMutation({
-    mutationFn: async (episode: {animeId: number, number: number, title: string, iframeUrl: string}) => {
-      await apiRequest("POST", "https://ryuustream.onrender.com/api/episodes", episode);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/animes'] });
-      toast({ title: 'Episode added successfully!' });
-    }
-  });
-
-
   async function fetchFromJikan(path: string) {
     const res = await fetch(`${path}`);
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message);
-    }
+    if (!res.ok) throw new Error((await res.json()).message);
     return res.json();
   }
 
   async function fetchAnimeInfo(malId: number) {
     setLoading(true);
     try {
-  const animeDataPromise = fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/full`);
-  const episodesDataPromise = fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/episodes`);
-
-  // Fetch both in parallel
-  const [animeData, episodesData] = await Promise.all([animeDataPromise, episodesDataPromise]);
-
-  const anime = animeData.data;
-
-  // Ensure title is set
-  animeForm.setValue("title", anime.title);
-  animeForm.setValue("malId", malId);
-  animeForm.setValue("episodes", anime.episodes);
-
-  // Handle image URL safely
-  const imageUrl = anime.images?.webp?.large_image_url || "";
-  animeForm.setValue("posterUrl", imageUrl);
-
-  // Handle description safely (removing unwanted HTML tags if present)
-  const cleanDescription = anime.synopsis
-    ? anime.synopsis.replace(/<\/?[^>]+(>|$)/g, "").trim() // Remove HTML tags
-    : "No description available.";
-  animeForm.setValue("description", cleanDescription);
-
-  setEpisodes(episodesData.data);
-  setEpisodeUrls(new Array(episodesData.data.length).fill(""));
-} catch (error: any) {
-  console.error("Error fetching from Jikan:", error);
-  toast({
-    title: "Error",
-    description: "Failed to fetch anime information",
-    variant: "destructive"
-  });
-} finally {
-  setLoading(false);
+      const [animeData, episodesData] = await Promise.all([
+        fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/full`),
+        fetchFromJikan(`https://api.jikan.moe/v4/anime/${malId}/episodes`)
+      ]);
+      const anime = animeData.data;
+      animeForm.setValue("title", anime.title);
+      animeForm.setValue("malId", malId);
+      animeForm.setValue("episodes", anime.episodes);
+      animeForm.setValue("posterUrl", anime.images?.webp?.large_image_url || "");
+      animeForm.setValue("description", anime.synopsis?.replace(/<[^>]*>?/gm, "").trim() || "No description available.");
+      setEpisodes(episodesData.data);
+      setEpisodeUrls(new Array(episodesData.data.length).fill(""));
+    } catch (error) {
+      console.error("Error fetching from Jikan:", error);
+      toast({ title: "Error", description: "Failed to fetch anime information", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    
   }
-
-  function startEditing(anime: Anime) {
-    setEditingAnimeId(anime.id);
-    editAnimeForm.reset(anime);
-  }
-
-  function startEditingEpisode(episode: Episode) {
-    setEditingEpisodeId(episode.id);
-    setEditingEpisodeData({ title: episode.title, iframeUrl: episode.iframeUrl });
-  }
-
 
   return (
     <div className="container py-8 space-y-8">
       <div className="space-y-4">
         <h2 className="text-2xl font-bold">Add Anime</h2>
-
         <div className="flex gap-2">
-          <Input
-            placeholder="MAL ID"
-            type="number"
-            className="w-32"
-            onChange={(e) => {
-              const id = parseInt(e.target.value);
-              if (id) fetchAnimeInfo(id);
-            }}
-            disabled={loading}
-          />
-          <Button disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {loading ? 'Loading...' : 'Fetch from MAL'}
-          </Button>
+          <Input placeholder="MAL ID" type="number" className="w-32" onChange={(e) => fetchAnimeInfo(parseInt(e.target.value))} disabled={loading} />
+          <Button disabled={loading}>{loading ? 'Loading...' : 'Fetch from MAL'}</Button>
         </div>
+     
+                         
 
         <Form {...animeForm}>
           <form onSubmit={animeForm.handleSubmit((data) => createAnimeMutation.mutate(data))} className="space-y-4">
