@@ -168,7 +168,7 @@ export default function Admin() {
 
 
   async function fetchFromJikan(path: string) {
-    const res = await fetch(`/api/jikan${path}`);
+    const res = await fetch(`${path}`);
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.message);
