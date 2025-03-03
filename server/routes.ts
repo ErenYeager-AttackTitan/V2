@@ -97,7 +97,7 @@ export async function registerRoutes(app: Express) {
       console.log(`Fetching anime data for MAL ID: ${malId}`);
 
       // Fetch anime details first
-      const animeData = await fetchWithDelay(`${JIKAN_BASE_URL}/anime/${malId}/full`);
+      const animeData = await fetchWithDelay(`https://ryuustream.onrender.com/api/jikan/anime/${malId}`);
 
       // Wait before making the second request
       await new Promise(resolve => setTimeout(resolve, 1000));
