@@ -183,7 +183,7 @@ export default function Admin() {
       const anime = animeData.data;
 
       animeForm.setValue("title", anime.title);
-      animeForm.setValue("posterUrl", anime.images.jpg.large_image_url);
+      animeForm.setValue("posterUrl", anime.images.webp.large_image_url);
       animeForm.setValue("description", anime.synopsis || "");
       animeForm.setValue("malId", malId);
       animeForm.setValue("episodes", anime.episodes);
